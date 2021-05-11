@@ -1,0 +1,6 @@
+[workspace]
+members = [
+	"kleinian",
+	"kleinian-cli",
+	"kleinian-web",
+]

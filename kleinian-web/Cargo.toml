@@ -1,0 +1,20 @@
+[package]
+name = "kleinian-web"
+version = "0.1.0"
+authors = ["Daniel R Gulotta <dgulotta@alum.mit.edu>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kleinian = { path = "../kleinian" }
+wasm-bindgen = "0.2"
+
+[dependencies.web-sys]
+version = "0.3.50"
+features = [
+	'ImageData',
+	'CanvasRenderingContext2d'
+]

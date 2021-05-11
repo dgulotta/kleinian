@@ -1,0 +1,12 @@
+[package]
+name = "kleinian"
+version = "0.1.0"
+authors = ["Daniel R Gulotta <dgulotta@alum.mit.edu>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+nalgebra = "^0.26"
+num-complex = "^0.3"
+ordered-float = "^2.0"
+derivative = "^2.2"
