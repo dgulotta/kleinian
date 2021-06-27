@@ -175,3 +175,28 @@ pub fn generators(ta: Cpx, tb: Cpx) -> [Matrix2<Cpx>; 4] {
     let a = ab * bi;
     [a, b, inv(&a), bi]
 }
+
+/// Returns a quadruple of matrices [a,b,a^{-1},b^{-1}] such that
+/// tr a = `ta`, tr b = `tb`, and tr abab^{-1} = -2.
+pub fn generators_xx(ta: Cpx, tb: Cpx) -> [Matrix2<Cpx>; 4] {
+    let hta = 0.5 * ta;
+    let htb = 0.5 * tb;
+    let hta21 = hta * hta - 1.0;
+    let htb2 = htb * htb;
+    let c0 = hta21 * (htb2 + 1.0) + 2.0;
+    let c1 = ta * (hta21 * htb2 + 1.0).sqrt();
+    let b1 = (c0 + c1).sqrt();
+    let a = Matrix2::new(hta, hta * hta - 1.0, (1.0).into(), hta);
+    let b = Matrix2::new(htb, b1, (htb * htb - 1.0) / b1, htb);
+    [a, b, inv(&a), inv(&b)]
+}
+
+/// Returns a quadruple of matrices [a,b,a^{-1},b^{-1}] such that
+/// tr a = `ta`, tr ab = tr ab^{-1} = 2.
+pub fn generators_x(ta: Cpx) -> [Matrix2<Cpx>; 4] {
+    let ah = 0.5 * ta;
+    let bh = 1.0 / ah;
+    let a = Matrix2::new(ah, ah * ah - 1.0, (1.0).into(), ah).transpose();
+    let b = Matrix2::new(bh, ah - bh, -bh, bh).transpose();
+    [a, b, inv(&a), inv(&b)]
+}
