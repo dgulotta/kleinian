@@ -1,17 +1,11 @@
+use core::ops::Mul;
 use derivative::Derivative;
-use nalgebra::{Matrix2, Vector2};
+use nalgebra::Matrix2;
 use num_complex::Complex;
 use ordered_float::NotNan;
 use std::collections::BinaryHeap;
 
 pub type Cpx = Complex<f64>;
-
-fn coordinate(v: &Vector2<Cpx>) -> Cpx {
-    v[0] / v[1]
-}
-fn height(v: &Vector2<Cpx>) -> f64 {
-    v[1].norm_sqr()
-}
 
 /// Returns the adjoint of the matrix m.  We only call this function with matrices
 /// of determinant 1, in which case the adjoint is the same as the inverse.
@@ -19,82 +13,134 @@ fn inv(m: &Matrix2<Cpx>) -> Matrix2<Cpx> {
     Matrix2::new(m[(1, 1)], -m[(0, 1)], -m[(1, 0)], m[(0, 0)])
 }
 
-fn fixed_points(m: &Matrix2<Cpx>) -> [Vector2<Cpx>; 2] {
-    let t = m.trace();
-    let d = (t * t - 4.0 * m.determinant()).sqrt();
-    let l1 = 0.5 * (t + d);
-    let l2 = 0.5 * (t - d);
-    let v1a = Vector2::new(m[(0, 0)] - l1, m[(1, 0)]);
-    let v1b = Vector2::new(m[(0, 1)], m[(1, 1)] - l1);
-    let v1 = if v1a.norm_squared() > v1b.norm_squared() {
-        v1a
+fn inv_dagger(m: &Matrix2<Cpx>) -> Matrix2<Cpx> {
+    Matrix2::new(
+        m[(1, 1)].conj(),
+        -m[(1, 0)].conj(),
+        -m[(0, 1)].conj(),
+        m[(0, 0)].conj(),
+    )
+}
+
+fn dagger(m: &Matrix2<Cpx>) -> Matrix2<Cpx> {
+    Matrix2::new(
+        m[(0, 0)].conj(),
+        m[(1, 0)].conj(),
+        m[(0, 1)].conj(),
+        m[(1, 1)].conj(),
+    )
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Circle(Matrix2<Cpx>);
+
+impl Mul<Circle> for Matrix2<Cpx> {
+    type Output = Circle;
+    fn mul(self, c: Circle) -> Circle {
+        Circle(inv_dagger(&self) * c.0 * inv(&self))
+    }
+}
+
+impl Circle {
+    pub fn radius_inv(&self) -> f64 {
+        self.0[(0, 0)].re.abs()
+    }
+    pub fn center(&self) -> Cpx {
+        -self.0[(0, 1)] / self.0[(0, 0)].re
+    }
+}
+
+fn row_vector_for_nilpotent(u: &Matrix2<Cpx>) -> nalgebra::RowVector2<Cpx> {
+    if u[(0, 1)].norm_sqr() >= u[(1, 0)].norm_sqr() {
+        let s = (-u[(0, 1)]).sqrt();
+        nalgebra::RowVector2::new(u[(0, 0)] / s, -s)
     } else {
-        v1b
-    };
-    let v2a = Vector2::new(m[(0, 0)] - l2, m[(1, 0)]);
-    let v2b = Vector2::new(m[(0, 1)], m[(1, 1)] - l2);
-    let v2 = if v2a.norm_squared() > v2b.norm_squared() {
-        v2a
-    } else {
-        v2b
-    };
-    [v1.normalize(), v2.normalize()]
-}
-
-#[derive(Default)]
-struct PointQueue {
-    points: Vec<Cpx>,
-    queue: BinaryHeap<PointIterItem>,
-}
-
-impl PointQueue {
-    fn new() -> Self {
-        Default::default()
-    }
-    fn push(&mut self, item: PointIterItem) {
-        self.points.push(coordinate(&item.point));
-        self.queue.push(item);
-    }
-    fn pop(&mut self) -> Option<PointIterItem> {
-        self.queue.pop()
+        let s = u[(1, 0)].sqrt();
+        nalgebra::RowVector2::new(s, u[(1, 1)] / s)
     }
 }
 
-pub fn generate_points(gens: [Matrix2<Cpx>; 4], num_points: usize) -> Vec<Cpx> {
-    let mut queue = PointQueue::new();
-    let fp1 = fixed_points(&gens[0]);
-    let fp2 = fixed_points(&gens[1]);
-    queue.push(PointIterItem::new(gens[1] * fp1[0], 1));
-    queue.push(PointIterItem::new(gens[3] * fp1[0], 3));
-    queue.push(PointIterItem::new(gens[1] * fp1[1], 1));
-    queue.push(PointIterItem::new(gens[3] * fp1[1], 3));
-    queue.push(PointIterItem::new(gens[0] * fp2[0], 0));
-    queue.push(PointIterItem::new(gens[2] * fp2[0], 2));
-    queue.push(PointIterItem::new(gens[0] * fp2[1], 0));
-    queue.push(PointIterItem::new(gens[2] * fp2[1], 2));
-    while queue.points.len() < num_points {
-        let item = queue.pop().unwrap();
-        for i in 3..6 {
-            let last = (item.last + i) % 4;
-            let point = gens[last as usize] * item.point;
-            queue.push(PointIterItem::new(point, last));
+/// Returns a circle C containing the fixed points of the parabolic
+/// transforms u and v, such that if b is any transform satisfying bub^{-1} = v,
+/// then bC is tangent to C.
+fn circle_for_transforms(u: &Matrix2<Cpx>, v: &Matrix2<Cpx>) -> Circle {
+    let un = u - Matrix2::from_diagonal_element(0.5 * u.trace());
+    let vn = v - Matrix2::from_diagonal_element(0.5 * v.trace());
+    let uv = row_vector_for_nilpotent(&un);
+    let vv = row_vector_for_nilpotent(&vn);
+    let m = vv.adjoint() * uv;
+    let mh = m + dagger(&m);
+    Circle(mh / (-mh.determinant()).sqrt())
+}
+
+/// A generator of a Kleinian group, along with a circle that approximates
+/// a boundary of a fundamental domain.
+///
+/// Usually, there is no fundamental domain with circular boundaries, so our
+/// circles are not tangent to each other.  But this heuristic seems to work
+/// well in practice.
+pub struct Generator {
+    pub matrix: Matrix2<Cpx>,
+    pub circle: Circle,
+}
+
+pub fn generate_points(gens: [Generator; 4], num_points: usize) -> Vec<Cpx> {
+    let mut queue = CircleQueue::new(gens);
+    while queue.len() < num_points {
+        queue.advance()
+    }
+    queue.circles().map(|c| c.center()).collect()
+}
+
+struct CircleQueue {
+    queue: BinaryHeap<QueueItem>,
+    gens: [Generator; 4],
+}
+
+impl CircleQueue {
+    fn item(&self, matrix: Matrix2<Cpx>, last: u8) -> QueueItem {
+        let ri = (matrix * self.gens[last as usize].circle).radius_inv();
+        QueueItem {
+            matrix,
+            last,
+            priority: NotNan::new(-ri).unwrap(),
         }
     }
-    queue.points
-}
-
-pub fn generate_points_from_traces(ta: Cpx, tb: Cpx, num_points: usize) -> Vec<Cpx> {
-    let gens = generators(ta, tb);
-    generate_points(gens, num_points)
+    pub fn new(gens: [Generator; 4]) -> Self {
+        let mut q = CircleQueue {
+            queue: BinaryHeap::new(),
+            gens,
+        };
+        for i in 0..4 {
+            q.queue.push(q.item(Matrix2::identity(), i));
+        }
+        q
+    }
+    pub fn advance(&mut self) {
+        let item = self.queue.pop().unwrap();
+        let matrix = item.matrix * self.gens[item.last as usize].matrix;
+        for i in 3..6 {
+            self.queue.push(self.item(matrix, (item.last + i) % 4));
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.queue.len()
+    }
+    pub fn circles(self) -> impl Iterator<Item = Circle> {
+        let (queue, gens) = (self.queue, self.gens);
+        queue
+            .into_iter()
+            .map(move |i| i.matrix * gens[i.last as usize].circle)
+    }
 }
 
 #[derive(Derivative)]
 #[derivative(PartialEq, Eq, PartialOrd, Ord)]
-struct PointIterItem {
+struct QueueItem {
     #[derivative(PartialEq = "ignore")]
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
-    point: Vector2<Cpx>,
+    matrix: Matrix2<Cpx>,
     #[derivative(PartialEq = "ignore")]
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
@@ -102,15 +148,9 @@ struct PointIterItem {
     priority: NotNan<f64>,
 }
 
-impl PointIterItem {
-    fn new(point: Vector2<Cpx>, last: u8) -> Self {
-        let priority = NotNan::new(-height(&point)).unwrap();
-        Self {
-            point,
-            last,
-            priority,
-        }
-    }
+pub fn generate_points_from_traces(ta: Cpx, tb: Cpx, num_points: usize) -> Vec<Cpx> {
+    let gens = generators(ta, tb);
+    generate_points(gens, num_points)
 }
 
 #[derive(Clone, Copy)]
@@ -161,7 +201,7 @@ pub fn window_transform(pts: &[Cpx], width: usize, height: usize) -> CoordTransf
 /// tr a = `ta`, tr b = `tb`, and tr aba^{-1}b^{-1} = -2.  The formula
 /// is taken from p229 of Indra's Pearls by Mumford, Series, and
 /// Wright.
-pub fn generators(ta: Cpx, tb: Cpx) -> [Matrix2<Cpx>; 4] {
+pub fn generators(ta: Cpx, tb: Cpx) -> [Generator; 4] {
     let c0 = ta * ta + tb * tb;
     let c1 = ta * tb;
     let tab = 0.5 * (c1 - (c1 * c1 - 4.0 * c0).sqrt());
@@ -173,12 +213,38 @@ pub fn generators(ta: Cpx, tb: Cpx) -> [Matrix2<Cpx>; 4] {
     let ab = Matrix2::new(htab, (htab - 1.0) / z0, (htab + 1.0) * z0, htab);
     let bi = inv(&b);
     let a = ab * bi;
-    [a, b, inv(&a), bi]
+    let ai = inv(&a);
+    let k1 = a * b * ai * bi;
+    let k2 = ai * bi * a * b;
+    let k3 = bi * a * b * ai;
+    let k4 = b * ai * b * a;
+    let ca = circle_for_transforms(&k1, &k3);
+    let cb = circle_for_transforms(&k1, &k4);
+    let cai = circle_for_transforms(&k2, &k4);
+    let cbi = circle_for_transforms(&k2, &k3);
+    [
+        Generator {
+            matrix: a,
+            circle: ca,
+        },
+        Generator {
+            matrix: b,
+            circle: cb,
+        },
+        Generator {
+            matrix: ai,
+            circle: cai,
+        },
+        Generator {
+            matrix: bi,
+            circle: cbi,
+        },
+    ]
 }
 
 /// Returns a quadruple of matrices [a,b,a^{-1},b^{-1}] such that
 /// tr a = `ta`, tr b = `tb`, and tr abab^{-1} = -2.
-pub fn generators_xx(ta: Cpx, tb: Cpx) -> [Matrix2<Cpx>; 4] {
+pub fn generators_xx(ta: Cpx, tb: Cpx) -> [Generator; 4] {
     let hta = 0.5 * ta;
     let htb = 0.5 * tb;
     let hta21 = hta * hta - 1.0;
@@ -188,15 +254,69 @@ pub fn generators_xx(ta: Cpx, tb: Cpx) -> [Matrix2<Cpx>; 4] {
     let b1 = (c0 + c1).sqrt();
     let a = Matrix2::new(hta, hta * hta - 1.0, (1.0).into(), hta);
     let b = Matrix2::new(htb, b1, (htb * htb - 1.0) / b1, htb);
-    [a, b, inv(&a), inv(&b)]
+    let ai = inv(&a);
+    let bi = inv(&b);
+    let k1 = a * bi * a * b;
+    let k2 = b * ai * bi * ai;
+    let k3 = b * a * bi * a;
+    let k4 = ai * bi * ai * b;
+    let ca = circle_for_transforms(&k1, &k2);
+    let cb = circle_for_transforms(&k2, &k3);
+    let cai = circle_for_transforms(&k3, &k4);
+    let cbi = circle_for_transforms(&k4, &k1);
+    [
+        Generator {
+            matrix: a,
+            circle: ca,
+        },
+        Generator {
+            matrix: b,
+            circle: cb,
+        },
+        Generator {
+            matrix: ai,
+            circle: cai,
+        },
+        Generator {
+            matrix: bi,
+            circle: cbi,
+        },
+    ]
 }
 
 /// Returns a quadruple of matrices [a,b,a^{-1},b^{-1}] such that
 /// tr a = `ta`, tr ab = tr ab^{-1} = 2.
-pub fn generators_x(ta: Cpx) -> [Matrix2<Cpx>; 4] {
+pub fn generators_x(ta: Cpx) -> [Generator; 4] {
     let ah = 0.5 * ta;
     let bh = 1.0 / ah;
-    let a = Matrix2::new(ah, ah * ah - 1.0, (1.0).into(), ah).transpose();
-    let b = Matrix2::new(bh, ah - bh, -bh, bh).transpose();
-    [a, b, inv(&a), inv(&b)]
+    let a = Matrix2::new(ah, (1.0).into(), ah * ah - 1.0, ah);
+    let b = Matrix2::new(bh, -bh, ah - bh, bh);
+    let ai = inv(&a);
+    let bi = inv(&b);
+    let ab = a * b;
+    let bai = b * ai;
+    let aibi = ai * bi;
+    let bia = bi * a;
+    let ca = circle_for_transforms(&ab, &bai);
+    let cb = circle_for_transforms(&bai, &aibi);
+    let cai = circle_for_transforms(&aibi, &bia);
+    let cbi = circle_for_transforms(&bia, &ab);
+    [
+        Generator {
+            matrix: a,
+            circle: ca,
+        },
+        Generator {
+            matrix: b,
+            circle: cb,
+        },
+        Generator {
+            matrix: ai,
+            circle: cai,
+        },
+        Generator {
+            matrix: bi,
+            circle: cbi,
+        },
+    ]
 }
