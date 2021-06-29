@@ -214,14 +214,14 @@ pub fn generators(ta: Cpx, tb: Cpx) -> [Generator; 4] {
     let bi = inv(&b);
     let a = ab * bi;
     let ai = inv(&a);
-    let k1 = a * b * ai * bi;
-    let k2 = ai * bi * a * b;
-    let k3 = bi * a * b * ai;
-    let k4 = b * ai * b * a;
-    let ca = circle_for_transforms(&k1, &k3);
-    let cb = circle_for_transforms(&k1, &k4);
-    let cai = circle_for_transforms(&k2, &k4);
-    let cbi = circle_for_transforms(&k2, &k3);
+    let k1 = bi * a * b * ai;
+    let k2 = a * b * ai * bi;
+    let k3 = b * ai * bi * a;
+    let k4 = ai * bi * a * b;
+    let ca = circle_for_transforms(&k1, &k2);
+    let cb = circle_for_transforms(&k2, &k3);
+    let cai = circle_for_transforms(&k3, &k4);
+    let cbi = circle_for_transforms(&k4, &k1);
     [
         Generator {
             matrix: a,
@@ -256,8 +256,8 @@ pub fn generators_xx(ta: Cpx, tb: Cpx) -> [Generator; 4] {
     let b = Matrix2::new(htb, b1, (htb * htb - 1.0) / b1, htb);
     let ai = inv(&a);
     let bi = inv(&b);
-    let k1 = a * bi * a * b;
-    let k2 = b * ai * bi * ai;
+    let k1 = bi * ai * b * ai;
+    let k2 = a * b * a * bi;
     let k3 = b * a * bi * a;
     let k4 = ai * bi * ai * b;
     let ca = circle_for_transforms(&k1, &k2);
@@ -293,14 +293,14 @@ pub fn generators_x(ta: Cpx) -> [Generator; 4] {
     let b = Matrix2::new(bh, -bh, ah - bh, bh);
     let ai = inv(&a);
     let bi = inv(&b);
-    let ab = a * b;
-    let bai = b * ai;
-    let aibi = ai * bi;
-    let bia = bi * a;
-    let ca = circle_for_transforms(&ab, &bai);
-    let cb = circle_for_transforms(&bai, &aibi);
-    let cai = circle_for_transforms(&aibi, &bia);
-    let cbi = circle_for_transforms(&bia, &ab);
+    let k1 = bi * ai;
+    let k2 = a * bi;
+    let k3 = b * a;
+    let k4 = ai * b;
+    let ca = circle_for_transforms(&k1, &k2);
+    let cb = circle_for_transforms(&k2, &k3);
+    let cai = circle_for_transforms(&k3, &k4);
+    let cbi = circle_for_transforms(&k4, &k1);
     [
         Generator {
             matrix: a,
