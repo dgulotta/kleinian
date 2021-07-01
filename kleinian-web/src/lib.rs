@@ -12,13 +12,17 @@ pub fn draw(
     im1: f64,
     re2: f64,
     im2: f64,
-    iters: u32,
+    typ: &str,
+    iters: usize,
 ) -> Result<(), JsValue> {
-    let pts = kleinian::generate_points_from_traces(
-        Cpx::new(re1, im1),
-        Cpx::new(re2, im2),
-        iters as usize,
-    );
+    let p1 = Cpx::new(re1, im1);
+    let p2 = Cpx::new(re2, im2);
+    let gens = match typ {
+        "xxi" => kleinian::generators_xx(p1, p2),
+        "xii" => kleinian::generators_x(p1),
+        _ => kleinian::generators(p1, p2)
+    };
+    let pts = kleinian::generate_points(gens, iters);
     let w = width as usize;
     let h = height as usize;
     let trans = kleinian::window_transform(&pts, w, h);
