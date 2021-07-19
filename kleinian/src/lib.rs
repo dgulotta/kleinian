@@ -1,77 +1,15 @@
-use core::ops::Mul;
-use derivative::Derivative;
+mod algebra;
+mod circle;
+mod queue;
+pub mod window;
+
+use crate::algebra::{circle_for_transforms, inv};
+use crate::circle::Circle;
+use crate::queue::CircleQueue;
 use nalgebra::Matrix2;
 use num_complex::Complex;
-use ordered_float::NotNan;
-use std::collections::BinaryHeap;
 
 pub type Cpx = Complex<f64>;
-
-/// Returns the adjoint of the matrix m.  We only call this function with matrices
-/// of determinant 1, in which case the adjoint is the same as the inverse.
-fn inv(m: &Matrix2<Cpx>) -> Matrix2<Cpx> {
-    Matrix2::new(m[(1, 1)], -m[(0, 1)], -m[(1, 0)], m[(0, 0)])
-}
-
-fn inv_dagger(m: &Matrix2<Cpx>) -> Matrix2<Cpx> {
-    Matrix2::new(
-        m[(1, 1)].conj(),
-        -m[(1, 0)].conj(),
-        -m[(0, 1)].conj(),
-        m[(0, 0)].conj(),
-    )
-}
-
-fn dagger(m: &Matrix2<Cpx>) -> Matrix2<Cpx> {
-    Matrix2::new(
-        m[(0, 0)].conj(),
-        m[(1, 0)].conj(),
-        m[(0, 1)].conj(),
-        m[(1, 1)].conj(),
-    )
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Circle(Matrix2<Cpx>);
-
-impl Mul<Circle> for Matrix2<Cpx> {
-    type Output = Circle;
-    fn mul(self, c: Circle) -> Circle {
-        Circle(inv_dagger(&self) * c.0 * inv(&self))
-    }
-}
-
-impl Circle {
-    pub fn radius_inv(&self) -> f64 {
-        self.0[(0, 0)].re.abs()
-    }
-    pub fn center(&self) -> Cpx {
-        -self.0[(0, 1)] / self.0[(0, 0)].re
-    }
-}
-
-fn row_vector_for_nilpotent(u: &Matrix2<Cpx>) -> nalgebra::RowVector2<Cpx> {
-    if u[(0, 1)].norm_sqr() >= u[(1, 0)].norm_sqr() {
-        let s = (-u[(0, 1)]).sqrt();
-        nalgebra::RowVector2::new(u[(0, 0)] / s, -s)
-    } else {
-        let s = u[(1, 0)].sqrt();
-        nalgebra::RowVector2::new(s, u[(1, 1)] / s)
-    }
-}
-
-/// Returns a circle C containing the fixed points of the parabolic
-/// transforms u and v, such that if b is any transform satisfying bub^{-1} = v,
-/// then bC is tangent to C.
-fn circle_for_transforms(u: &Matrix2<Cpx>, v: &Matrix2<Cpx>) -> Circle {
-    let un = u - Matrix2::from_diagonal_element(0.5 * u.trace());
-    let vn = v - Matrix2::from_diagonal_element(0.5 * v.trace());
-    let uv = row_vector_for_nilpotent(&un);
-    let vv = row_vector_for_nilpotent(&vn);
-    let m = vv.adjoint() * uv;
-    let mh = m + dagger(&m);
-    Circle(mh / (-mh.determinant()).sqrt())
-}
 
 /// A generator of a Kleinian group, along with a circle that approximates
 /// a boundary of a fundamental domain.
@@ -92,109 +30,9 @@ pub fn generate_points(gens: [Generator; 4], num_points: usize) -> Vec<Cpx> {
     queue.circles().map(|c| c.center()).collect()
 }
 
-struct CircleQueue {
-    queue: BinaryHeap<QueueItem>,
-    gens: [Generator; 4],
-}
-
-impl CircleQueue {
-    fn item(&self, matrix: Matrix2<Cpx>, last: u8) -> QueueItem {
-        let ri = (matrix * self.gens[last as usize].circle).radius_inv();
-        QueueItem {
-            matrix,
-            last,
-            priority: NotNan::new(-ri).unwrap(),
-        }
-    }
-    pub fn new(gens: [Generator; 4]) -> Self {
-        let mut q = CircleQueue {
-            queue: BinaryHeap::new(),
-            gens,
-        };
-        for i in 0..4 {
-            q.queue.push(q.item(Matrix2::identity(), i));
-        }
-        q
-    }
-    pub fn advance(&mut self) {
-        let item = self.queue.pop().unwrap();
-        let matrix = item.matrix * self.gens[item.last as usize].matrix;
-        for i in 3..6 {
-            self.queue.push(self.item(matrix, (item.last + i) % 4));
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.queue.len()
-    }
-    pub fn circles(self) -> impl Iterator<Item = Circle> {
-        let (queue, gens) = (self.queue, self.gens);
-        queue
-            .into_iter()
-            .map(move |i| i.matrix * gens[i.last as usize].circle)
-    }
-}
-
-#[derive(Derivative)]
-#[derivative(PartialEq, Eq, PartialOrd, Ord)]
-struct QueueItem {
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
-    matrix: Matrix2<Cpx>,
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
-    last: u8,
-    priority: NotNan<f64>,
-}
-
 pub fn generate_points_from_traces(ta: Cpx, tb: Cpx, num_points: usize) -> Vec<Cpx> {
     let gens = generators(ta, tb);
     generate_points(gens, num_points)
-}
-
-#[derive(Clone, Copy)]
-pub struct CoordTransform {
-    scale: f64,
-    xoff: f64,
-    yoff: f64,
-}
-
-impl CoordTransform {
-    pub fn apply(&self, pt: &Cpx) -> (usize, usize) {
-        let x = (self.scale * (pt.re - self.xoff)) as usize;
-        let y = (self.scale * (pt.im - self.yoff)) as usize;
-        (x, y)
-    }
-}
-
-pub fn window_transform(pts: &[Cpx], width: usize, height: usize) -> CoordTransform {
-    let w = width as f64;
-    let h = height as f64;
-    let p_xmin = *pts
-        .iter()
-        .map(|z| NotNan::new(z.re).unwrap())
-        .min()
-        .unwrap();
-    let p_xmax = *pts
-        .iter()
-        .map(|z| NotNan::new(z.re).unwrap())
-        .max()
-        .unwrap();
-    let p_ymin = *pts
-        .iter()
-        .map(|z| NotNan::new(z.im).unwrap())
-        .min()
-        .unwrap();
-    let p_ymax = *pts
-        .iter()
-        .map(|z| NotNan::new(z.im).unwrap())
-        .max()
-        .unwrap();
-    let scale = f64::min(w / (p_xmax - p_xmin), h / (p_ymax - p_ymin)) * 0.999;
-    let xoff = 0.5 * (p_xmin + p_xmax - w / scale);
-    let yoff = 0.5 * (p_ymin + p_ymax - h / scale);
-    CoordTransform { scale, xoff, yoff }
 }
 
 /// Returns a quadruple of matrices [a,b,a^{-1},b^{-1}] such that

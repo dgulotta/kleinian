@@ -20,12 +20,12 @@ pub fn draw(
     let gens = match typ {
         "xxi" => kleinian::generators_xx(p1, p2),
         "xii" => kleinian::generators_x(p1),
-        _ => kleinian::generators(p1, p2)
+        _ => kleinian::generators(p1, p2),
     };
     let pts = kleinian::generate_points(gens, iters);
     let w = width as usize;
     let h = height as usize;
-    let trans = kleinian::window_transform(&pts, w, h);
+    let trans = kleinian::window::window_transform(&pts, w, h);
     let mut pixel_data = Vec::new();
     pixel_data.resize(w * h * 4, 255);
     for pt in pts {

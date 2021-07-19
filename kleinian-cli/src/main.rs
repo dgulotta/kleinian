@@ -42,7 +42,7 @@ fn main() {
     let p1 = Cpx::new(re1, im1);
     let p2 = Cpx::new(re2, im2);
     let pts = kleinian::generate_points_from_traces(p1, p2, iters as usize);
-    let trans = kleinian::window_transform(&pts, width, height);
+    let trans = kleinian::window::window_transform(&pts, width, height);
     let mut pixel_data = Vec::new();
     pixel_data.resize(width * height, 255);
     for pt in pts {
