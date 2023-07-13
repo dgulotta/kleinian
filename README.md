@@ -15,6 +15,7 @@ cargo run --release -- --help
 To start the web interface:
 ```sh
 cd kleinian-web
+npm install webpack-dev-server
 npm run serve
 ```
 
