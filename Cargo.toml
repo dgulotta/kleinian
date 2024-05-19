@@ -4,3 +4,4 @@ members = [
 	"kleinian-cli",
 	"kleinian-web",
 ]
+resolver = "2"

@@ -1,6 +1,6 @@
 use clap::{value_t, App, Arg};
-use image::png::PngEncoder;
-use image::ColorType;
+use image::codecs::png::PngEncoder;
+use image::{ExtendedColorType, ImageEncoder};
 use kleinian::Cpx;
 use std::fs::File;
 
@@ -52,6 +52,6 @@ fn main() {
     }
     let f = File::create(filename.as_str()).unwrap_or_else(|e| clap::Error::from(e).exit());
     PngEncoder::new(f)
-        .encode(&pixel_data, width as u32, height as u32, ColorType::L8)
+        .write_image(&pixel_data, width as u32, height as u32, ExtendedColorType::L8)
         .unwrap();
 }
