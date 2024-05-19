@@ -1,5 +1,4 @@
 /target
 Cargo.lock
-node_modules
-dist
-package-lock.json
+kleinian_web.js
+kleinian_web_bg.wasm

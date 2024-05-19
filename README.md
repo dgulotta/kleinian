@@ -12,11 +12,16 @@ To see the options for the command line program:
 cd kleinian-cli
 cargo run --release -- --help
 ```
-To start the web interface:
+To build the web interface:
 ```sh
 cd kleinian-web
-npm install webpack-dev-server
-npm run serve
+cargo build --release --target wasm32-unknown-unknown
+wasm-bindgen ../target/wasm32-unknown-unknown/release/kleinian_web.wasm --out-dir pkg --target web --no-typescript
+```
+Then the web interface can be tested with any web server.  For example:
+```
+cd pkg
+python3 -m http.server
 ```
 
 Further reading
