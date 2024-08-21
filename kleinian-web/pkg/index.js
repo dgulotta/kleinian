@@ -1,5 +1,14 @@
 import init, { draw } from './kleinian_web.js';
 
+function defaultValue(val, def) {
+	if (isNaN(val)) {
+		return def;
+	}
+	else {
+		return val;
+	}
+}
+
 async function run() {
 	await init();
 	const canvas = document.getElementById('drawing');
@@ -16,12 +25,12 @@ async function run() {
 	});
 
 	renderBtn.addEventListener('click', () => {
-		const width = parseInt(document.getElementById("width").value) || 800;
-		const height = parseInt(document.getElementById("height").value) || 800;
-		const a_re = parseFloat(document.getElementById("a-re").value) || 2;
-		const a_im = parseFloat(document.getElementById("a-im").value) || 0;
-		const b_re = parseFloat(document.getElementById("b-re").value) || 2;
-		const b_im = parseFloat(document.getElementById("b-im").value) || 0;
+		const width = defaultValue(parseInt(document.getElementById("width").value),800);
+		const height = defaultValue(parseInt(document.getElementById("height").value),800);
+		const a_re = defaultValue(parseFloat(document.getElementById("a-re").value),2);
+		const a_im = defaultValue(parseFloat(document.getElementById("a-im").value),0);
+		const b_re = defaultValue(parseFloat(document.getElementById("b-re").value),2);
+		const b_im = defaultValue(parseFloat(document.getElementById("b-im").value),0);
 		const typ = document.getElementById("type").value;
 		const iters = parseInt(document.getElementById("iters").value) || 100000;
 		canvas.width = width;
