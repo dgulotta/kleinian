@@ -6,6 +6,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-clap = "2.33"
+clap = "4.5"
 image = { version = "0.25", features = ["png"] }
 kleinian = { path = "../kleinian" }
