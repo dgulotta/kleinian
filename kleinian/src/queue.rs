@@ -1,5 +1,5 @@
 use crate::{Circle, Cpx, Generator};
-use derivative::Derivative;
+use derive_where::derive_where;
 use nalgebra::Matrix2;
 use ordered_float::NotNan;
 use std::collections::BinaryHeap;
@@ -46,16 +46,11 @@ impl CircleQueue {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(PartialEq, Eq, PartialOrd, Ord)]
+#[derive_where(PartialEq, Eq, PartialOrd, Ord)]
 struct QueueItem {
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
+    #[derive_where(skip(EqHashOrd))]
     matrix: Matrix2<Cpx>,
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
+    #[derive_where(skip(EqHashOrd))]
     last: u8,
     priority: NotNan<f64>,
 }
